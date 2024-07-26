@@ -1,25 +1,16 @@
-import tkinter as tk
-from tkinter import filedialog, simpledialog
+import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
 
-def load_data():
-    global df
-    file_path = filedialog.askopenfilename(
-        title="Selecciona el archivo Excel",
-        filetypes=[("Excel files", "*.xlsx")]
-    )
-    if file_path:
-        sheet_name = simpledialog.askstring("Input", "Nombre de la hoja de cálculo (deja vacío para usar la primera hoja)")
-        if not sheet_name:
-            sheet_name = 0  # Usar la primera hoja si no se especifica ningún nombre
-        try:
-            df = pd.read_excel(file_path, sheet_name=sheet_name)
-            print("Datos cargados exitosamente.")
-        except Exception as e:
-            print(f"Error al cargar datos: {e}")
+def load_data(file):
+    try:
+        df = pd.read_excel(file)
+        st.write("Datos cargados exitosamente.")
+        return df
+    except Exception as e:
+        st.error(f"Error al cargar datos: {e}")
+        return None
 
 def col_letter_to_index(letter):
     """Convierte una letra o secuencia de letras en un índice de columna (0-indexado)."""
@@ -29,48 +20,38 @@ def col_letter_to_index(letter):
         index = index * 26 + (ord(char) - ord('A') + 1)
     return index - 1
 
-def get_range():
-    global df
-    if df is not None:
-        # Seleccionar rango de filas
-        start_row = simpledialog.askinteger("Input", "Desde qué fila tomar los datos (empieza desde 1)")
-        end_row = simpledialog.askinteger("Input", "Hasta qué fila tomar los datos (empieza desde 1)")
+def get_range(df):
+    # Seleccionar rango de filas
+    start_row = st.number_input("Desde qué fila tomar los datos (empieza desde 1)", min_value=1, value=1)
+    end_row = st.number_input("Hasta qué fila tomar los datos (empieza desde 1)", min_value=1, value=df.shape[0])
 
-        if start_row is not None and end_row is not None:
-            start_row -= 1  # Convertir a índice basado en 0
-            end_row -= 1
-            df = df.iloc[start_row:end_row + 1]
+    if start_row and end_row:
+        start_row -= 1  # Convertir a índice basado en 0
+        end_row -= 1
+        df = df.iloc[start_row:end_row + 1]
         
         # Seleccionar rango de columnas
-        start_col = simpledialog.askstring("Input", "Desde qué columna tomar los datos (letra, e.g., 'A')")
-        end_col = simpledialog.askstring("Input", "Hasta qué columna tomar los datos (letra, e.g., 'Z')")
+        start_col = st.text_input("Desde qué columna tomar los datos (letra, e.g., 'A')")
+        end_col = st.text_input("Hasta qué columna tomar los datos (letra, e.g., 'Z')")
 
         if start_col and end_col:
             start_idx = col_letter_to_index(start_col)
             end_idx = col_letter_to_index(end_col)
             df = df.iloc[:, start_idx:end_idx + 1]
-            print("Rango de datos ajustado.")
+            st.write("Rango de datos ajustado.")
+    
+    return df
 
-def calculate_statistics():
-    global df
+def calculate_statistics(df):
     if df is not None:
         # Calcular promedio de cada columna
         averages = df.mean(numeric_only=True)
-        print(f"Promedios calculados: {averages}")
+        st.write(f"Promedios calculados: {averages}")
         return averages
     return None
 
-def plot_data(averages):
-    global df
+def plot_data(df, averages):
     if df is not None and averages is not None:
-        # Crear la ventana principal
-        root = tk.Tk()
-        root.title("Visualización de Datos")
-
-        # Crear un marco para contener los gráficos
-        frame = tk.Frame(root)
-        frame.pack(fill=tk.BOTH, expand=True)
-
         # Crear los gráficos
         fig, axs = plt.subplots(1, 3, figsize=(18, 6))
 
@@ -93,36 +74,18 @@ def plot_data(averages):
             axs[2].pie(max_values, labels=max_values.index, autopct='%1.1f%%', startangle=140)
             axs[2].set_title('Distribución de valores mayores')
 
-        # Integrar matplotlib con tkinter
-        canvas = FigureCanvasTkAgg(fig, master=frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-
-        # Función para guardar los gráficos
-        def save_graphs():
-            file_path = filedialog.asksaveasfilename(
-                defaultextension=".png",
-                filetypes=[("PNG files", "*.png"), ("JPG files", "*.jpg"), ("All files", "*.*")]
-            )
-            if file_path:
-                fig.savefig(file_path)
-                print(f"Gráficos guardados en {file_path}")
-
-        # Botón para guardar los gráficos
-        save_button = tk.Button(root, text="Guardar Gráficos", command=save_graphs)
-        save_button.pack(pady=10)
-
-        # Iniciar el bucle principal de tkinter
-        root.mainloop()
+        st.pyplot(fig)
 
 def main():
-    global df
-    df = None
-
-    load_data()
-    get_range()
-    averages = calculate_statistics()
-    plot_data(averages)
+    st.title("Visualización de Datos desde Excel")
+    
+    uploaded_file = st.file_uploader("Elige un archivo Excel", type="xlsx")
+    if uploaded_file is not None:
+        df = load_data(uploaded_file)
+        if df is not None:
+            df = get_range(df)
+            averages = calculate_statistics(df)
+            plot_data(df, averages)
 
 if __name__ == "__main__":
     main()
